@@ -6,7 +6,7 @@ Tout le reste est à écrire — voir le TD 1.
 
 import pytest
 
-from fleet_api.models import Position, Reading
+from fleet_api.models import Position, Reading, RobotState
 from fleet_api.telemetry import (
     average_speed_mps,
     battery_percentage,
@@ -15,6 +15,7 @@ from fleet_api.telemetry import (
     is_low_battery,
     median_voltage_mv,
     path_length_m,
+    robot_state,
 )
 
 # ---------------------------------------------------------------------------
@@ -178,3 +179,34 @@ def test_median_voltage_mv_nombre_pair():
     """Sur un nombre pair de mesures, la médiane moyenne les deux valeurs centrales."""
     readings = [_reading(voltage_mv=v) for v in (10_000, 11_000, 12_000, 13_000)]
     assert median_voltage_mv(readings) == pytest.approx(11_500)
+
+
+# ---------------------------------------------------------------------------
+# robot_state — priorité OFFLINE > CHARGING > LOW_BATTERY > OPERATIONAL.
+# ---------------------------------------------------------------------------
+
+
+def test_robot_state_offline_prime_sur_batterie_basse():
+    """Un robot silencieux est hors ligne même si sa dernière batterie était basse."""
+    reading = _reading(timestamp_s=0.0, voltage_mv=10_500)  # 0 %, en dessous du seuil
+    assert robot_state(reading, now_s=200.0) == RobotState.OFFLINE
+
+
+def test_robot_state_charging_prime_sur_batterie_basse():
+    reading = _reading(timestamp_s=0.0, voltage_mv=10_500, is_charging=True)
+    assert robot_state(reading, now_s=0.0) == RobotState.CHARGING
+
+
+def test_robot_state_low_battery():
+    reading = _reading(timestamp_s=0.0, voltage_mv=10_500)  # 0 %
+    assert robot_state(reading, now_s=0.0) == RobotState.LOW_BATTERY
+
+
+def test_robot_state_operational():
+    reading = _reading(timestamp_s=0.0, voltage_mv=12_600)  # 100 %
+    assert robot_state(reading, now_s=0.0) == RobotState.OPERATIONAL
+
+
+def test_robot_state_juste_avant_le_delai_de_grace():
+    reading = _reading(timestamp_s=0.0, voltage_mv=12_600)
+    assert robot_state(reading, now_s=120.0, grace_s=120.0) == RobotState.OPERATIONAL
