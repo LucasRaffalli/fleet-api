@@ -11,6 +11,7 @@ from fleet_api.telemetry import (
     average_speed_mps,
     battery_percentage,
     distance_m,
+    estimate_runtime_minutes,
     is_low_battery,
     path_length_m,
 )
@@ -132,3 +133,17 @@ def test_average_speed_mps_cas_nominal():
 @pytest.mark.parametrize("elapsed_s", [0.0, -5.0])
 def test_average_speed_mps_duree_non_positive(elapsed_s):
     assert average_speed_mps(10.0, elapsed_s) is None
+
+
+# ---------------------------------------------------------------------------
+# estimate_runtime_minutes
+# ---------------------------------------------------------------------------
+
+
+def test_estimate_runtime_minutes_cas_nominal():
+    assert estimate_runtime_minutes(50.0, 2.0) == pytest.approx(25.0)
+
+
+@pytest.mark.parametrize("drain_pct_per_min", [0.0, -1.0])
+def test_estimate_runtime_minutes_pas_de_decharge(drain_pct_per_min):
+    assert estimate_runtime_minutes(50.0, drain_pct_per_min) is None
