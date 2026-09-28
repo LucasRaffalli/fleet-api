@@ -11,6 +11,7 @@ from fleet_api.telemetry import (
     battery_percentage,
     distance_m,
     is_low_battery,
+    path_length_m,
 )
 
 # ---------------------------------------------------------------------------
@@ -78,3 +79,41 @@ def test_is_low_battery_au_dessus_du_seuil():
 def test_is_low_battery_pile_au_seuil():
     """« Un robot exactement au seuil est donc en alerte » (docstring)."""
     assert is_low_battery(20.0, 20.0) is True
+
+
+# ---------------------------------------------------------------------------
+# path_length_m — somme des distances entre positions consécutives.
+# ---------------------------------------------------------------------------
+
+
+def test_path_length_m_liste_vide():
+    assert path_length_m([]) == 0.0
+
+
+def test_path_length_m_un_seul_point():
+    assert path_length_m([Position(0, 0)]) == 0.0
+
+
+@pytest.mark.xfail(
+    reason=(
+        "bug : la boucle `range(len(positions) - 2)` saute le dernier segment "
+        "du trajet, deux positions donnent donc une longueur nulle au lieu de "
+        "la distance entre elles."
+    ),
+    strict=True,
+)
+def test_path_length_m_deux_points():
+    assert path_length_m([Position(0, 0), Position(3, 4)]) == pytest.approx(5.0)
+
+
+@pytest.mark.xfail(
+    reason=(
+        "bug : même cause, un trajet à trois points ne compte que le premier "
+        "segment, pas la somme complète."
+    ),
+    strict=True,
+)
+def test_path_length_m_trois_points():
+    trajet = [Position(0, 0), Position(3, 4), Position(3, 0)]
+    # segment 1 : (0,0)->(3,4) = 5.0 ; segment 2 : (3,4)->(3,0) = 4.0
+    assert path_length_m(trajet) == pytest.approx(9.0)
