@@ -8,6 +8,7 @@ import pytest
 
 from fleet_api.models import Position
 from fleet_api.telemetry import (
+    average_speed_mps,
     battery_percentage,
     distance_m,
     is_low_battery,
@@ -117,3 +118,17 @@ def test_path_length_m_trois_points():
     trajet = [Position(0, 0), Position(3, 4), Position(3, 0)]
     # segment 1 : (0,0)->(3,4) = 5.0 ; segment 2 : (3,4)->(3,0) = 4.0
     assert path_length_m(trajet) == pytest.approx(9.0)
+
+
+# ---------------------------------------------------------------------------
+# average_speed_mps
+# ---------------------------------------------------------------------------
+
+
+def test_average_speed_mps_cas_nominal():
+    assert average_speed_mps(10.0, 5.0) == pytest.approx(2.0)
+
+
+@pytest.mark.parametrize("elapsed_s", [0.0, -5.0])
+def test_average_speed_mps_duree_non_positive(elapsed_s):
+    assert average_speed_mps(10.0, elapsed_s) is None
