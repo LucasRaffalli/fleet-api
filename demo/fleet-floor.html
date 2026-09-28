@@ -176,18 +176,31 @@
     border-radius:8px;
     padding:10px;
     text-align:center;
+    transition:background-color .2s, border-color .2s;
   }
+  .stat.wide{grid-column:1/-1;}
   .stat .num{
     font-family:"Archivo",sans-serif;
     font-weight:800;
-    font-size:20px;
+    font-size:22px;
     font-variant-numeric:tabular-nums;
     line-height:1.1;
   }
   .stat .label{
+    display:block;
+    margin-top:2px;
     font-size:10px;
     color:var(--ink-dim);
     letter-spacing:0.04em;
+  }
+  .stat.alert{background:var(--warn-bg); border-color:var(--warn);}
+  .stat.alert .num{color:var(--warn);}
+  .stat.alert .label{color:var(--warn);}
+  .fleet-updated{
+    margin-top:8px;
+    font-size:10px;
+    color:var(--ink-dim);
+    text-align:right;
   }
 
   .robot-row{
@@ -261,6 +274,16 @@
   .btn:active{transform:translateY(1px);}
   .btn.primary{background:var(--accent); border-color:var(--accent); color:#fff8f0;}
   .btn.wide{width:100%;}
+  .btn-pair{display:flex; gap:6px;}
+  .btn-pair .btn{flex:1;}
+  .ctrl-hint{
+    font-size:10.5px;
+    color:var(--accent);
+    background:var(--warn-bg);
+    border-radius:6px;
+    padding:6px 8px;
+    margin-top:2px;
+  }
   select{
     font-family:"IBM Plex Mono",monospace;
     font-size:11px;
@@ -366,10 +389,11 @@
     <div class="card">
       <h2>fleet_summary()</h2>
       <div class="fleet-stats">
-        <div class="stat"><div class="num" id="statCount">0</div><div class="label">robot_count</div></div>
-        <div class="stat"><div class="num" id="statAvg">0%</div><div class="label">average_battery_pct</div></div>
-        <div class="stat" style="grid-column:1/-1"><div class="num" id="statLow">0</div><div class="label">low_battery_count</div></div>
+        <div class="stat"><div class="num" id="statCount">0</div><span class="label">robot_count</span></div>
+        <div class="stat"><div class="num" id="statAvg">0%</div><span class="label">average_battery_pct</span></div>
+        <div class="stat wide" id="statLowTile"><div class="num" id="statLow">0</div><span class="label">low_battery_count</span></div>
       </div>
+      <div class="fleet-updated" id="fleetUpdated">en attente de l'API…</div>
     </div>
 
     <div class="card">
@@ -397,6 +421,15 @@
     </div>
 
     <div class="card">
+      <h2>objets à placer</h2>
+      <div class="btn-pair">
+        <button class="btn" id="btnAddCharger">🔌 chargeur</button>
+        <button class="btn" id="btnAddDrain">⚡ zone drain</button>
+      </div>
+      <div class="ctrl-hint" id="placeHint" hidden></div>
+    </div>
+
+    <div class="card">
       <h2>robots</h2>
       <div id="robotList"></div>
     </div>
@@ -404,7 +437,7 @@
 </div>
 
 <footer>
-  Batterie : <code>battery_percentage()</code> linéaire 10500–12600 mV · alerte : <code>is_low_battery(pct &lt;= 20)</code> · état : <code>robot_state()</code>, priorité OFFLINE &gt; CHARGING &gt; LOW_BATTERY &gt; OPERATIONAL, calculés côté serveur par l'API réelle. Lance <code>uv run fastapi dev src/fleet_api/api.py</code> avant d'ouvrir cette page. L'état OFFLINE réel n'apparaît qu'après le délai de grâce de l'API (120 s par défaut) sans nouvelle mesure — couper le signal d'un robot est donc lent par design, comme en vrai.
+  Batterie : <code>battery_percentage()</code> linéaire 10500–12600 mV · alerte : <code>is_low_battery(pct &lt;= 20)</code> · état : <code>robot_state()</code>, priorité OFFLINE &gt; CHARGING &gt; LOW_BATTERY &gt; OPERATIONAL, calculés côté serveur par l'API réelle. Lance <code>uv run fastapi dev src/fleet_api/api.py</code> avant d'ouvrir cette page. L'état OFFLINE réel n'apparaît qu'après le délai de grâce de l'API (120 s par défaut) sans nouvelle mesure — couper le signal d'un robot est donc lent par design, comme en vrai. Clique « 🔌 chargeur » ou « ⚡ zone drain » puis clique sur le sol pour poser l'objet où tu veux ; reclique sur un objet posé pour le retirer.
 </footer>
 
 <script>
@@ -470,8 +503,9 @@
   const canvas = document.getElementById("floor");
   const ctx = canvas.getContext("2d");
   const W = canvas.width, H = canvas.height;
-  const DOCK = { x: 60, y: H - 60, w: 90, h: 46 };
   const R = 13; // rayon d'un robot
+  const CHARGER_R = 34; // rayon de détection/dessin d'un chargeur
+  const DRAIN_R = 36; // rayon par défaut d'une zone de drain posée
 
   // ---- persistance locale : garde la simulation entre deux rechargements -
   // (par viewer, dans ce navigateur seulement — ça ne synchronise rien avec l'API)
@@ -484,6 +518,8 @@
           nextRobotN,
           paused,
           speed,
+          chargers,
+          drainZones,
           robots: robots.map((r) => ({
             id: r.id,
             x: r.x,
@@ -533,6 +569,12 @@
   let robots;
   let paused = saved ? !!saved.paused : false;
   let speed = saved ? saved.speed || 1 : 1;
+  // { x, y } — au moins un par défaut, sinon les robots bas en batterie errent sans but.
+  let chargers = saved && Array.isArray(saved.chargers) && saved.chargers.length
+    ? saved.chargers
+    : [{ x: 105, y: H - 37 }];
+  // { x, y, r } — vide par défaut, posées à la main.
+  let drainZones = saved && Array.isArray(saved.drainZones) ? saved.drainZones : [];
   if (saved) {
     nextRobotN = saved.nextRobotN || saved.robots.length + 1;
     robots = saved.robots.map((r) => ({ ...r, trail: [], remote: null }));
@@ -593,6 +635,70 @@
     saveState();
   }
 
+  // ---- placement d'objets sur le sol : chargeurs et zones de drain -------
+  let placing = null; // "charger" | "drain" | null
+  const btnAddCharger = document.getElementById("btnAddCharger");
+  const btnAddDrain = document.getElementById("btnAddDrain");
+  const placeHint = document.getElementById("placeHint");
+
+  function setPlacing(mode) {
+    placing = placing === mode ? null : mode;
+    btnAddCharger.classList.toggle("primary", placing === "charger");
+    btnAddDrain.classList.toggle("primary", placing === "drain");
+    canvas.style.cursor = placing ? "crosshair" : "default";
+    placeHint.hidden = !placing;
+    placeHint.textContent =
+      placing === "charger"
+        ? "Clique sur le sol pour poser un chargeur."
+        : placing === "drain"
+        ? "Clique sur le sol pour poser une zone qui draine la batterie."
+        : "";
+  }
+  btnAddCharger.addEventListener("click", () => setPlacing("charger"));
+  btnAddDrain.addEventListener("click", () => setPlacing("drain"));
+
+  canvas.addEventListener("click", (e) => {
+    const rect = canvas.getBoundingClientRect();
+    const x = (e.clientX - rect.left) * (canvas.width / rect.width);
+    const y = (e.clientY - rect.top) * (canvas.height / rect.height);
+
+    if (placing === "charger") {
+      chargers.push({ x, y });
+      setPlacing(null);
+      saveState();
+      return;
+    }
+    if (placing === "drain") {
+      drainZones.push({ x, y, r: DRAIN_R });
+      setPlacing(null);
+      saveState();
+      return;
+    }
+
+    // pas en mode placement : un clic sur un objet existant le retire.
+    const ci = chargers.findIndex((c) => Math.hypot(c.x - x, c.y - y) < CHARGER_R);
+    if (ci >= 0) {
+      if (chargers.length > 1) chargers.splice(ci, 1); // toujours garder un chargeur
+      saveState();
+      return;
+    }
+    const di = drainZones.findIndex((z) => Math.hypot(z.x - x, z.y - y) < z.r);
+    if (di >= 0) {
+      drainZones.splice(di, 1);
+      saveState();
+    }
+  });
+
+  function nearestCharger(r) {
+    if (!chargers.length) return null;
+    let best = null, bestD = Infinity;
+    for (const c of chargers) {
+      const d = Math.hypot(c.x - r.x, c.y - r.y);
+      if (d < bestD) { bestD = d; best = c; }
+    }
+    return best;
+  }
+
   let lastFrame = performance.now();
   let simTime = 0;
 
@@ -609,10 +715,11 @@
 
         const pct = batteryPercentage(r.voltage_mv);
         const seeking = pct <= LOW_BATTERY_PCT + 5 && !r.isCharging;
+        const target = seeking ? nearestCharger(r) : null;
 
-        if (seeking) {
-          const dx = (DOCK.x + DOCK.w / 2) - r.x;
-          const dy = (DOCK.y + DOCK.h / 2) - r.y;
+        if (target) {
+          const dx = target.x - r.x;
+          const dy = target.y - r.y;
           const d = Math.hypot(dx, dy) || 1;
           r.vx += (dx / d) * 0.06;
           r.vy += (dy / d) * 0.06;
@@ -642,7 +749,11 @@
         if (r.y < R + 20) { r.y = R + 20; r.vy *= -1; }
         if (r.y > H - R - 20) { r.y = H - R - 20; r.vy *= -1; }
 
-        r.voltage_mv += r.isCharging ? 14 * dt * 4 : -1.1 * dt * 4;
+        let drainMvPerS = 1.1;
+        for (const z of drainZones) {
+          if (Math.hypot(z.x - r.x, z.y - r.y) < z.r) drainMvPerS += 3.4;
+        }
+        r.voltage_mv += r.isCharging ? 14 * dt * 4 : -drainMvPerS * dt * 4;
         r.voltage_mv = Math.max(EMPTY_MV - 200, Math.min(FULL_MV, r.voltage_mv));
 
         r.trail.push({ x: r.x, y: r.y });
@@ -658,15 +769,38 @@
   function draw(t) {
     ctx.clearRect(0, 0, W, H);
 
-    ctx.fillStyle = getVar("--charge-bg");
-    ctx.strokeStyle = getVar("--charge");
-    ctx.lineWidth = 1.5;
-    roundRect(ctx, DOCK.x, DOCK.y, DOCK.w, DOCK.h, 8);
-    ctx.fill(); ctx.stroke();
-    ctx.fillStyle = getVar("--charge");
-    ctx.font = "600 11px 'IBM Plex Mono', monospace";
-    ctx.textAlign = "center";
-    ctx.fillText("DOCK", DOCK.x + DOCK.w / 2, DOCK.y + DOCK.h / 2 + 4);
+    for (const z of drainZones) {
+      ctx.beginPath();
+      ctx.arc(z.x, z.y, z.r, 0, Math.PI * 2);
+      ctx.fillStyle = getVar("--off-bg");
+      ctx.globalAlpha = 0.55;
+      ctx.fill();
+      ctx.globalAlpha = 1;
+      ctx.setLineDash([4, 4]);
+      ctx.strokeStyle = getVar("--off");
+      ctx.lineWidth = 1.5;
+      ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.fillStyle = getVar("--off");
+      ctx.font = "700 14px 'Archivo', sans-serif";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillText("⚡", z.x, z.y);
+    }
+
+    const DW = 74, DH = 40;
+    for (const c of chargers) {
+      ctx.fillStyle = getVar("--charge-bg");
+      ctx.strokeStyle = getVar("--charge");
+      ctx.lineWidth = 1.5;
+      roundRect(ctx, c.x - DW / 2, c.y - DH / 2, DW, DH, 8);
+      ctx.fill(); ctx.stroke();
+      ctx.fillStyle = getVar("--charge");
+      ctx.font = "600 10px 'IBM Plex Mono', monospace";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "alphabetic";
+      ctx.fillText("🔌 DOCK", c.x, c.y + 4);
+    }
 
     for (const r of robots) {
       const st = r.signalLost ? "offline" : (r.remote ? r.remote.state : "pending");
@@ -767,10 +901,12 @@
   }
 
   let fleetRemote = null;
+  let fleetUpdatedAt = null;
   async function pullFleet() {
     try {
       const res = await fetch(`${apiBase}/fleet`, { signal: AbortSignal.timeout(3000) });
       fleetRemote = res.ok ? await res.json() : null;
+      if (res.ok) fleetUpdatedAt = performance.now();
     } catch {
       fleetRemote = null;
     }
@@ -795,6 +931,8 @@
   const statCount = document.getElementById("statCount");
   const statAvg = document.getElementById("statAvg");
   const statLow = document.getElementById("statLow");
+  const statLowTile = document.getElementById("statLowTile");
+  const fleetUpdatedEl = document.getElementById("fleetUpdated");
 
   let rowEls = null;
   function buildRows() {
@@ -840,6 +978,16 @@
     statCount.textContent = summary.robot_count;
     statAvg.textContent = summary.average_battery_pct.toFixed(1) + "%";
     statLow.textContent = summary.low_battery_count;
+    statLowTile.classList.toggle("alert", summary.low_battery_count > 0);
+
+    if (!apiUp) {
+      fleetUpdatedEl.textContent = "API injoignable";
+    } else if (fleetUpdatedAt == null) {
+      fleetUpdatedEl.textContent = "en attente de l'API…";
+    } else {
+      const s = Math.round((performance.now() - fleetUpdatedAt) / 1000);
+      fleetUpdatedEl.textContent = s <= 1 ? "mis à jour à l'instant" : `mis à jour il y a ${s}s`;
+    }
 
     if (!rowEls) buildRows();
 
