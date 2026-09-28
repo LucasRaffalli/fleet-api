@@ -1,0 +1,565 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Fleet Floor</title>
+<meta name="description" content="Simulation en direct de l'entrepôt fleet-api : robots, batteries et alertes calculés avec les vraies règles de telemetry.py.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;700;800&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --floor-0:#e9e4da;
+    --floor-1:#d8d0c0;
+    --ink:#2b2620;
+    --ink-dim:#6b6357;
+    --panel:#f6f3ec;
+    --panel-border:#c9c0ac;
+    --rail:#8a8371;
+    --accent:#c4622d;
+    --ok:#3f7d4f;
+    --ok-bg:#dcebdf;
+    --warn:#b8862c;
+    --warn-bg:#f4e6cb;
+    --charge:#2f6f9e;
+    --charge-bg:#d9e9f2;
+    --off:#8a2f2f;
+    --off-bg:#f0dcdb;
+    color-scheme: light;
+  }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      --floor-0:#211d18;
+      --floor-1:#171410;
+      --ink:#ece6da;
+      --ink-dim:#a89d89;
+      --panel:#2a251e;
+      --panel-border:#463e32;
+      --rail:#5c5344;
+      --accent:#e08a4f;
+      --ok:#6fbf82;
+      --ok-bg:#22331f;
+      --warn:#e0b458;
+      --warn-bg:#392e18;
+      --charge:#7cb8e0;
+      --charge-bg:#1b2c38;
+      --off:#e08080;
+      --off-bg:#3a1f1f;
+      color-scheme: dark;
+    }
+  }
+  :root[data-theme="dark"]{
+    --floor-0:#211d18;
+    --floor-1:#171410;
+    --ink:#ece6da;
+    --ink-dim:#a89d89;
+    --panel:#2a251e;
+    --panel-border:#463e32;
+    --rail:#5c5344;
+    --accent:#e08a4f;
+    --ok:#6fbf82;
+    --ok-bg:#22331f;
+    --warn:#e0b458;
+    --warn-bg:#392e18;
+    --charge:#7cb8e0;
+    --charge-bg:#1b2c38;
+    --off:#e08080;
+    --off-bg:#3a1f1f;
+    color-scheme: dark;
+  }
+
+  *{box-sizing:border-box;}
+  body{
+    margin:0;
+    background:var(--floor-0);
+    color:var(--ink);
+    font-family:"IBM Plex Mono",ui-monospace,monospace;
+    padding-inline:16px;
+    padding-block:20px;
+    display:flex;
+    flex-direction:column;
+    gap:14px;
+    min-height:100%;
+  }
+
+  header{
+    display:flex;
+    flex-wrap:wrap;
+    align-items:baseline;
+    justify-content:space-between;
+    gap:8px 20px;
+    max-width:1100px;
+    margin-inline:auto;
+    width:100%;
+  }
+  h1{
+    font-family:"Archivo",sans-serif;
+    font-weight:800;
+    font-size:clamp(22px,3.4vw,30px);
+    letter-spacing:-0.02em;
+    margin:0;
+  }
+  h1 span{color:var(--accent);}
+  .subtitle{
+    color:var(--ink-dim);
+    font-size:12.5px;
+    max-width:46ch;
+  }
+
+  .layout{
+    max-width:1100px;
+    margin-inline:auto;
+    width:100%;
+    display:grid;
+    grid-template-columns:minmax(0,1fr) 260px;
+    gap:14px;
+  }
+  @media (max-width:760px){
+    .layout{grid-template-columns:1fr;}
+  }
+
+  .floor-wrap{
+    position:relative;
+    border:1px solid var(--panel-border);
+    border-radius:10px;
+    overflow:hidden;
+    background:
+      repeating-linear-gradient(0deg, var(--floor-1) 0 2px, transparent 2px 40px),
+      repeating-linear-gradient(90deg, var(--floor-1) 0 2px, transparent 2px 40px),
+      var(--floor-0);
+  }
+  canvas{display:block; width:100%; height:auto;}
+
+  .dock-label{
+    position:absolute;
+    font-family:"Archivo",sans-serif;
+    font-weight:700;
+    font-size:10px;
+    letter-spacing:0.08em;
+    text-transform:uppercase;
+    color:var(--ink-dim);
+    pointer-events:none;
+  }
+
+  aside{
+    display:flex;
+    flex-direction:column;
+    gap:10px;
+    min-width:0;
+  }
+
+  .card{
+    background:var(--panel);
+    border:1px solid var(--panel-border);
+    border-radius:10px;
+    padding:12px 14px;
+  }
+  .card h2{
+    font-family:"Archivo",sans-serif;
+    font-size:11px;
+    font-weight:700;
+    letter-spacing:0.09em;
+    text-transform:uppercase;
+    color:var(--ink-dim);
+    margin:0 0 8px;
+  }
+
+  .fleet-stats{
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:8px;
+  }
+  .stat{
+    background:var(--floor-0);
+    border:1px solid var(--panel-border);
+    border-radius:8px;
+    padding:8px 10px;
+  }
+  .stat .num{
+    font-family:"Archivo",sans-serif;
+    font-weight:800;
+    font-size:20px;
+    font-variant-numeric:tabular-nums;
+    line-height:1.1;
+  }
+  .stat .label{
+    font-size:10px;
+    color:var(--ink-dim);
+    letter-spacing:0.04em;
+  }
+
+  .robot-row{
+    display:flex;
+    align-items:center;
+    gap:8px;
+    padding:6px 0;
+    border-top:1px solid var(--panel-border);
+    font-size:11.5px;
+  }
+  .robot-row:first-of-type{border-top:none;}
+  .robot-row .dot{
+    width:9px;height:9px;border-radius:50%;flex:0 0 auto;
+  }
+  .robot-row .id{
+    font-weight:600;
+    width:26px;
+    flex:0 0 auto;
+  }
+  .robot-row .batt{
+    margin-left:auto;
+    font-variant-numeric:tabular-nums;
+    color:var(--ink-dim);
+    white-space:nowrap;
+  }
+  .pill{
+    font-size:9.5px;
+    font-weight:600;
+    letter-spacing:0.03em;
+    padding:2px 6px;
+    border-radius:99px;
+    white-space:nowrap;
+  }
+  .pill.operational{color:var(--ok); background:var(--ok-bg);}
+  .pill.low_battery{color:var(--warn); background:var(--warn-bg);}
+  .pill.charging{color:var(--charge); background:var(--charge-bg);}
+  .pill.offline{color:var(--off); background:var(--off-bg);}
+
+  .legend{
+    display:flex;
+    flex-wrap:wrap;
+    gap:8px 12px;
+    font-size:11px;
+    color:var(--ink-dim);
+  }
+  .legend span{display:inline-flex; align-items:center; gap:5px;}
+  .legend .dot{width:8px;height:8px;border-radius:50%;}
+
+  footer{
+    max-width:1100px;
+    margin:0 auto;
+    width:100%;
+    font-size:11px;
+    color:var(--ink-dim);
+    border-top:1px solid var(--panel-border);
+    padding-top:10px;
+  }
+  code{
+    font-family:"IBM Plex Mono",monospace;
+    background:var(--floor-1);
+    padding:1px 5px;
+    border-radius:4px;
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div>
+    <h1>fleet<span>-floor</span></h1>
+    <div class="subtitle">Simulation de l'entrepôt : mêmes seuils et mêmes règles que <code>telemetry.py</code>, appliqués en direct à des robots qui se baladent.</div>
+  </div>
+  <div class="legend">
+    <span><i class="dot" style="background:var(--ok)"></i>operational</span>
+    <span><i class="dot" style="background:var(--warn)"></i>low_battery ≤20%</span>
+    <span><i class="dot" style="background:var(--charge)"></i>charging</span>
+    <span><i class="dot" style="background:var(--off)"></i>offline &gt;120s</span>
+  </div>
+</header>
+
+<div class="layout">
+  <div class="floor-wrap">
+    <canvas id="floor" width="820" height="560"></canvas>
+  </div>
+
+  <aside>
+    <div class="card">
+      <h2>fleet_summary()</h2>
+      <div class="fleet-stats">
+        <div class="stat"><div class="num" id="statCount">0</div><div class="label">robot_count</div></div>
+        <div class="stat"><div class="num" id="statAvg">0%</div><div class="label">average_battery_pct</div></div>
+        <div class="stat" style="grid-column:1/-1"><div class="num" id="statLow">0</div><div class="label">low_battery_count</div></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>robots</h2>
+      <div id="robotList"></div>
+    </div>
+  </aside>
+</div>
+
+<footer>
+  Batterie : <code>battery_percentage()</code> linéaire 10500–12600 mV · alerte : <code>is_low_battery(pct &lt;= 20)</code> · état : <code>robot_state()</code>, priorité OFFLINE &gt; CHARGING &gt; LOW_BATTERY &gt; OPERATIONAL. Robots à la dérive vers la station quand ils sont bas ; simulation locale, aucune donnée envoyée.
+</footer>
+
+<script>
+(() => {
+  "use strict";
+
+  // ---- port fidèle des règles de src/fleet_api/telemetry.py --------------
+  const EMPTY_MV = 10500;
+  const FULL_MV = 12600;
+  const LOW_BATTERY_PCT = 20.0;
+  const OFFLINE_GRACE_S = 12; // raccourci pour que ce soit visible à l'écran
+
+  function batteryPercentage(mv) {
+    const ratio = (mv - EMPTY_MV) / (FULL_MV - EMPTY_MV);
+    return Math.round(Math.max(0, Math.min(1, ratio)) * 1000) / 10;
+  }
+  function isLowBattery(pct, threshold = LOW_BATTERY_PCT) {
+    return pct <= threshold;
+  }
+  function robotState(voltageMv, sSinceSeen, isCharging, graceS = OFFLINE_GRACE_S) {
+    if (sSinceSeen > graceS) return "offline";
+    if (isCharging) return "charging";
+    if (isLowBattery(batteryPercentage(voltageMv))) return "low_battery";
+    return "operational";
+  }
+
+  const STATE_COLOR = {
+    operational: getVar("--ok"),
+    low_battery: getVar("--warn"),
+    charging: getVar("--charge"),
+    offline: getVar("--off"),
+  };
+  function getVar(name) {
+    return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+  }
+
+  // ---- entrepôt -------------------------------------------------------
+  const canvas = document.getElementById("floor");
+  const ctx = canvas.getContext("2d");
+  const W = canvas.width, H = canvas.height;
+  const DOCK = { x: 60, y: H - 60, w: 90, h: 46 };
+  const R = 13; // rayon d'un robot
+
+  const NAMES = ["R1", "R2", "R3", "R4", "R5", "R6"];
+  let robots = NAMES.map((id, i) => ({
+    id,
+    x: 160 + (i % 3) * 230 + Math.random() * 40,
+    y: 100 + Math.floor(i / 3) * 260 + Math.random() * 40,
+    vx: (Math.random() - 0.5) * 1.4,
+    vy: (Math.random() - 0.5) * 1.4,
+    voltage_mv: EMPTY_MV + Math.random() * (FULL_MV - EMPTY_MV),
+    lastSeen: performance.now() / 1000,
+    isCharging: false,
+    signalLost: false,
+    trail: [],
+  }));
+
+  let lastFrame = performance.now();
+  const clock0 = performance.now() / 1000;
+
+  function step(now) {
+    const dt = Math.min((now - lastFrame) / 1000, 0.1);
+    lastFrame = now;
+    const t = now / 1000;
+
+    for (const r of robots) {
+      const pct = batteryPercentage(r.voltage_mv);
+      const seeking = pct <= LOW_BATTERY_PCT + 5 && !r.isCharging;
+
+      if (!r.signalLost) {
+        r.lastSeen = t;
+
+        if (seeking) {
+          const dx = (DOCK.x + DOCK.w / 2) - r.x;
+          const dy = (DOCK.y + DOCK.h / 2) - r.y;
+          const d = Math.hypot(dx, dy) || 1;
+          r.vx += (dx / d) * 0.06;
+          r.vy += (dy / d) * 0.06;
+          if (d < 26) {
+            r.isCharging = true;
+            r.vx = 0; r.vy = 0;
+          }
+        } else {
+          r.vx += (Math.random() - 0.5) * 0.12;
+          r.vy += (Math.random() - 0.5) * 0.12;
+        }
+
+        if (r.isCharging && pct >= 97) {
+          r.isCharging = false;
+          r.vx = (Math.random() - 0.5) * 1.2;
+          r.vy = (Math.random() - 0.5) * -1.2;
+        }
+
+        const maxV = 1.6;
+        const sp = Math.hypot(r.vx, r.vy);
+        if (sp > maxV) { r.vx = (r.vx / sp) * maxV; r.vy = (r.vy / sp) * maxV; }
+
+        if (!r.isCharging) {
+          r.x += r.vx * dt * 60;
+          r.y += r.vy * dt * 60;
+        }
+
+        if (r.x < R + 20) { r.x = R + 20; r.vx *= -1; }
+        if (r.x > W - R - 20) { r.x = W - R - 20; r.vx *= -1; }
+        if (r.y < R + 20) { r.y = R + 20; r.vy *= -1; }
+        if (r.y > H - R - 20) { r.y = H - R - 20; r.vy *= -1; }
+
+        r.voltage_mv += r.isCharging ? 14 : -1.1;
+        r.voltage_mv = Math.max(EMPTY_MV - 200, Math.min(FULL_MV, r.voltage_mv));
+
+        r.trail.push({ x: r.x, y: r.y });
+        if (r.trail.length > 26) r.trail.shift();
+
+        if (Math.random() < 0.0009) r.signalLost = true;
+      } else {
+        if (Math.random() < 0.01) { r.signalLost = false; r.lastSeen = t; }
+      }
+    }
+
+    draw(t);
+    updateHud(t);
+    requestAnimationFrame(step);
+  }
+
+  function draw(t) {
+    ctx.clearRect(0, 0, W, H);
+
+    // station de charge
+    ctx.fillStyle = getVar("--charge-bg");
+    ctx.strokeStyle = getVar("--charge");
+    ctx.lineWidth = 1.5;
+    roundRect(ctx, DOCK.x, DOCK.y, DOCK.w, DOCK.h, 8);
+    ctx.fill(); ctx.stroke();
+    ctx.fillStyle = getVar("--charge");
+    ctx.font = "600 11px 'IBM Plex Mono', monospace";
+    ctx.textAlign = "center";
+    ctx.fillText("DOCK", DOCK.x + DOCK.w / 2, DOCK.y + DOCK.h / 2 + 4);
+
+    for (const r of robots) {
+      const st = robotState(r.voltage_mv, t - r.lastSeen, r.isCharging);
+      const color = r.signalLost ? getVar("--off") : STATE_COLOR[st];
+
+      // traînée
+      ctx.beginPath();
+      for (let i = 0; i < r.trail.length; i++) {
+        const p = r.trail[i];
+        i === 0 ? ctx.moveTo(p.x, p.y) : ctx.lineTo(p.x, p.y);
+      }
+      ctx.strokeStyle = color;
+      ctx.globalAlpha = 0.18;
+      ctx.lineWidth = 3;
+      ctx.stroke();
+      ctx.globalAlpha = 1;
+
+      const x = r.x, y = r.signalLost ? r.y : r.y;
+
+      // halo si low/offline
+      if (st === "low_battery" && !r.signalLost) {
+        ctx.beginPath();
+        ctx.arc(x, y, R + 5 + Math.sin(t * 6) * 2, 0, Math.PI * 2);
+        ctx.strokeStyle = color;
+        ctx.globalAlpha = 0.5;
+        ctx.lineWidth = 2;
+        ctx.stroke();
+        ctx.globalAlpha = 1;
+      }
+
+      // corps
+      ctx.beginPath();
+      ctx.arc(x, y, R, 0, Math.PI * 2);
+      ctx.fillStyle = r.signalLost ? "transparent" : color;
+      ctx.globalAlpha = r.signalLost ? 0.3 : 1;
+      ctx.fill();
+      ctx.lineWidth = 2;
+      ctx.strokeStyle = color;
+      ctx.stroke();
+      ctx.globalAlpha = 1;
+
+      // id
+      ctx.fillStyle = getVar("--floor-0");
+      ctx.font = "700 10px 'Archivo', sans-serif";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      if (!r.signalLost) ctx.fillText(r.id, x, y);
+
+      // jauge batterie
+      const pct = batteryPercentage(r.voltage_mv);
+      const bw = 26, bh = 4, bx = x - bw / 2, by = y - R - 11;
+      ctx.fillStyle = getVar("--panel-border");
+      ctx.fillRect(bx, by, bw, bh);
+      ctx.fillStyle = color;
+      ctx.fillRect(bx, by, bw * (pct / 100), bh);
+
+      if (r.signalLost) {
+        ctx.fillStyle = getVar("--off");
+        ctx.font = "700 9px 'IBM Plex Mono', monospace";
+        ctx.fillText("? ? ?", x, y);
+      }
+    }
+  }
+
+  function roundRect(c, x, y, w, h, r) {
+    c.beginPath();
+    c.moveTo(x + r, y);
+    c.arcTo(x + w, y, x + w, y + h, r);
+    c.arcTo(x + w, y + h, x, y + h, r);
+    c.arcTo(x, y + h, x, y, r);
+    c.arcTo(x, y, x + w, y, r);
+    c.closePath();
+  }
+
+  const listEl = document.getElementById("robotList");
+  const statCount = document.getElementById("statCount");
+  const statAvg = document.getElementById("statAvg");
+  const statLow = document.getElementById("statLow");
+
+  function fleetSummary(readings, threshold = LOW_BATTERY_PCT) {
+    const levels = readings.map((r) => batteryPercentage(r.voltage_mv));
+    return {
+      robot_count: readings.length,
+      average_battery_pct: levels.length
+        ? Math.round((levels.reduce((a, b) => a + b, 0) / levels.length) * 10) / 10
+        : 0.0,
+      low_battery_count: levels.filter((l) => isLowBattery(l, threshold)).length,
+    };
+  }
+
+  let rowEls = null;
+  function updateHud(t) {
+    const summary = fleetSummary(robots);
+    statCount.textContent = summary.robot_count;
+    statAvg.textContent = summary.average_battery_pct.toFixed(1) + "%";
+    statLow.textContent = summary.low_battery_count;
+
+    if (!rowEls) {
+      listEl.innerHTML = robots
+        .map(
+          (r) => `
+        <div class="robot-row" data-id="${r.id}">
+          <i class="dot"></i>
+          <span class="id">${r.id}</span>
+          <span class="pill"></span>
+          <span class="batt"></span>
+        </div>`
+        )
+        .join("");
+      rowEls = {};
+      listEl.querySelectorAll(".robot-row").forEach((el) => {
+        rowEls[el.dataset.id] = {
+          dot: el.querySelector(".dot"),
+          pill: el.querySelector(".pill"),
+          batt: el.querySelector(".batt"),
+        };
+      });
+    }
+
+    for (const r of robots) {
+      const st = r.signalLost ? "offline" : robotState(r.voltage_mv, t - r.lastSeen, r.isCharging);
+      const pct = batteryPercentage(r.voltage_mv);
+      const row = rowEls[r.id];
+      row.dot.style.background = STATE_COLOR[st];
+      row.pill.textContent = st;
+      row.pill.className = "pill " + st;
+      row.batt.textContent = pct.toFixed(1) + "%";
+    }
+  }
+
+  requestAnimationFrame(step);
+})();
+</script>
+</body>
+</html>
