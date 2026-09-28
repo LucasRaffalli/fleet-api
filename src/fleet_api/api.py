@@ -5,6 +5,7 @@ from __future__ import annotations
 import time
 
 from fastapi import Depends, FastAPI, HTTPException, Response
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
 from fleet_api import __version__
@@ -21,6 +22,15 @@ app = FastAPI(
     title="fleet-api",
     version=__version__,
     summary="Supervision d'une flotte de robots d'entrepôt",
+)
+
+# CORS ouvert sur localhost : sert uniquement la page de démo statique
+# (demo/fleet-floor.html), servie sur un autre port (Go Live, file://) en dev.
+app.add_middleware(
+    CORSMiddleware,
+    allow_origin_regex=r"http://(localhost|127\.0\.0\.1)(:\d+)?",
+    allow_methods=["GET", "POST"],
+    allow_headers=["*"],
 )
 
 _store: Store = build_store()

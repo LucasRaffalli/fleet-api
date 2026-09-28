@@ -174,7 +174,8 @@
     background:var(--floor-0);
     border:1px solid var(--panel-border);
     border-radius:8px;
-    padding:8px 10px;
+    padding:10px;
+    text-align:center;
   }
   .stat .num{
     font-family:"Archivo",sans-serif;
@@ -191,9 +192,10 @@
 
   .robot-row{
     display:flex;
+    flex-wrap:wrap;
     align-items:center;
-    gap:8px;
-    padding:6px 0;
+    gap:6px 8px;
+    padding:7px 0;
     border-top:1px solid var(--panel-border);
     font-size:11.5px;
   }
@@ -211,6 +213,62 @@
     font-variant-numeric:tabular-nums;
     color:var(--ink-dim);
     white-space:nowrap;
+  }
+  .robot-row .actions{
+    display:flex;
+    gap:4px;
+    width:100%;
+    order:5;
+  }
+
+  .icon-btn{
+    font-family:inherit;
+    font-size:11px;
+    line-height:1;
+    background:var(--floor-0);
+    border:1px solid var(--panel-border);
+    color:var(--ink-dim);
+    border-radius:6px;
+    padding:4px 6px;
+    cursor:pointer;
+  }
+  .icon-btn:hover{color:var(--ink); border-color:var(--rail);}
+  .icon-btn:active{transform:translateY(1px);}
+  .icon-btn.danger:hover{color:var(--off); border-color:var(--off);}
+
+  .ctrl-row{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:8px;
+    padding:6px 0;
+  }
+  .ctrl-row + .ctrl-row{border-top:1px solid var(--panel-border);}
+  .ctrl-row label{color:var(--ink-dim); font-size:11px;}
+  .btn{
+    font-family:"Archivo",sans-serif;
+    font-weight:700;
+    font-size:11px;
+    letter-spacing:0.01em;
+    background:var(--floor-0);
+    border:1px solid var(--panel-border);
+    color:var(--ink);
+    border-radius:7px;
+    padding:6px 10px;
+    cursor:pointer;
+  }
+  .btn:hover{border-color:var(--rail);}
+  .btn:active{transform:translateY(1px);}
+  .btn.primary{background:var(--accent); border-color:var(--accent); color:#fff8f0;}
+  .btn.wide{width:100%;}
+  select{
+    font-family:"IBM Plex Mono",monospace;
+    font-size:11px;
+    background:var(--floor-0);
+    border:1px solid var(--panel-border);
+    color:var(--ink);
+    border-radius:6px;
+    padding:4px 6px;
   }
   .pill{
     font-size:9.5px;
@@ -234,6 +292,29 @@
   }
   .legend span{display:inline-flex; align-items:center; gap:5px;}
   .legend .dot{width:8px;height:8px;border-radius:50%;}
+  .pill.pending{color:var(--ink-dim); background:var(--floor-1);}
+
+  .conn{
+    display:flex;
+    align-items:center;
+    gap:8px;
+    margin-bottom:8px;
+  }
+  .conn .dot{width:8px;height:8px;border-radius:50%;background:var(--rail); flex:0 0 auto;}
+  .conn .dot.up{background:var(--ok);}
+  .conn .dot.down{background:var(--off);}
+  .conn-text{font-size:11px; color:var(--ink-dim);}
+  .api-input{
+    width:100%;
+    font-family:"IBM Plex Mono",monospace;
+    font-size:11px;
+    background:var(--floor-0);
+    border:1px solid var(--panel-border);
+    color:var(--ink);
+    border-radius:6px;
+    padding:6px 8px;
+    margin-top:6px;
+  }
 
   footer{
     max-width:1100px;
@@ -257,13 +338,13 @@
 <header>
   <div>
     <h1>fleet<span>-floor</span></h1>
-    <div class="subtitle">Simulation de l'entrepôt : mêmes seuils et mêmes règles que <code>telemetry.py</code>, appliqués en direct à des robots qui se baladent.</div>
+    <div class="subtitle">Les robots bougent en local, mais leur état vient de <code>fleet-api</code> en direct : chaque mesure est envoyée par <code>POST /robots/{id}/telemetry</code>, l'affichage relit <code>GET /robots/{id}</code> et <code>GET /fleet</code>.</div>
   </div>
   <div class="legend">
     <span><i class="dot" style="background:var(--ok)"></i>operational</span>
     <span><i class="dot" style="background:var(--warn)"></i>low_battery ≤20%</span>
     <span><i class="dot" style="background:var(--charge)"></i>charging</span>
-    <span><i class="dot" style="background:var(--off)"></i>offline &gt;120s</span>
+    <span><i class="dot" style="background:var(--off)"></i>offline</span>
   </div>
 </header>
 
@@ -274,11 +355,44 @@
 
   <aside>
     <div class="card">
+      <h2>connexion api</h2>
+      <div class="conn">
+        <i class="dot" id="connDot"></i>
+        <span class="conn-text" id="connText">test de connexion…</span>
+      </div>
+      <input class="api-input" id="apiBaseInput" spellcheck="false" value="http://127.0.0.1:8000">
+    </div>
+
+    <div class="card">
       <h2>fleet_summary()</h2>
       <div class="fleet-stats">
         <div class="stat"><div class="num" id="statCount">0</div><div class="label">robot_count</div></div>
         <div class="stat"><div class="num" id="statAvg">0%</div><div class="label">average_battery_pct</div></div>
         <div class="stat" style="grid-column:1/-1"><div class="num" id="statLow">0</div><div class="label">low_battery_count</div></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>contrôles</h2>
+      <div class="ctrl-row">
+        <label>simulation</label>
+        <button class="btn" id="btnPause">pause</button>
+      </div>
+      <div class="ctrl-row">
+        <label>vitesse</label>
+        <select id="speedSelect">
+          <option value="0.5">0.5×</option>
+          <option value="1" selected>1×</option>
+          <option value="2">2×</option>
+          <option value="4">4×</option>
+        </select>
+      </div>
+      <div class="ctrl-row">
+        <label>flotte</label>
+        <button class="btn" id="btnAdd">+ robot</button>
+      </div>
+      <div class="ctrl-row">
+        <button class="btn wide" id="btnReset">réinitialiser</button>
       </div>
     </div>
 
@@ -290,31 +404,23 @@
 </div>
 
 <footer>
-  Batterie : <code>battery_percentage()</code> linéaire 10500–12600 mV · alerte : <code>is_low_battery(pct &lt;= 20)</code> · état : <code>robot_state()</code>, priorité OFFLINE &gt; CHARGING &gt; LOW_BATTERY &gt; OPERATIONAL. Robots à la dérive vers la station quand ils sont bas ; simulation locale, aucune donnée envoyée.
+  Batterie : <code>battery_percentage()</code> linéaire 10500–12600 mV · alerte : <code>is_low_battery(pct &lt;= 20)</code> · état : <code>robot_state()</code>, priorité OFFLINE &gt; CHARGING &gt; LOW_BATTERY &gt; OPERATIONAL, calculés côté serveur par l'API réelle. Lance <code>uv run fastapi dev src/fleet_api/api.py</code> avant d'ouvrir cette page. L'état OFFLINE réel n'apparaît qu'après le délai de grâce de l'API (120 s par défaut) sans nouvelle mesure — couper le signal d'un robot est donc lent par design, comme en vrai.
 </footer>
 
 <script>
 (() => {
   "use strict";
 
-  // ---- port fidèle des règles de src/fleet_api/telemetry.py --------------
+  // ---- physique locale : sert seulement à faire bouger les robots à ------
+  // l'écran. La donnée qui compte (état, % batterie, distance, agrégats)
+  // vient de l'API réelle, interrogée plus bas.
   const EMPTY_MV = 10500;
   const FULL_MV = 12600;
   const LOW_BATTERY_PCT = 20.0;
-  const OFFLINE_GRACE_S = 12; // raccourci pour que ce soit visible à l'écran
 
   function batteryPercentage(mv) {
     const ratio = (mv - EMPTY_MV) / (FULL_MV - EMPTY_MV);
     return Math.round(Math.max(0, Math.min(1, ratio)) * 1000) / 10;
-  }
-  function isLowBattery(pct, threshold = LOW_BATTERY_PCT) {
-    return pct <= threshold;
-  }
-  function robotState(voltageMv, sSinceSeen, isCharging, graceS = OFFLINE_GRACE_S) {
-    if (sSinceSeen > graceS) return "offline";
-    if (isCharging) return "charging";
-    if (isLowBattery(batteryPercentage(voltageMv))) return "low_battery";
-    return "operational";
   }
 
   const STATE_COLOR = {
@@ -322,10 +428,43 @@
     low_battery: getVar("--warn"),
     charging: getVar("--charge"),
     offline: getVar("--off"),
+    pending: getVar("--rail"),
   };
   function getVar(name) {
     return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
   }
+
+  // ---- connexion à l'API --------------------------------------------------
+  let apiBase = document.getElementById("apiBaseInput").value.trim();
+  try {
+    const saved = localStorage.getItem("fleetFloorApiBase");
+    if (saved) { apiBase = saved; document.getElementById("apiBaseInput").value = saved; }
+  } catch {}
+
+  const connDot = document.getElementById("connDot");
+  const connText = document.getElementById("connText");
+  let apiUp = false;
+
+  document.getElementById("apiBaseInput").addEventListener("change", (e) => {
+    apiBase = e.target.value.trim().replace(/\/$/, "");
+    try { localStorage.setItem("fleetFloorApiBase", apiBase); } catch {}
+    pingHealth();
+  });
+
+  async function pingHealth() {
+    try {
+      const res = await fetch(`${apiBase}/health`, { signal: AbortSignal.timeout(2000) });
+      apiUp = res.ok;
+    } catch {
+      apiUp = false;
+    }
+    connDot.className = "dot " + (apiUp ? "up" : "down");
+    connText.textContent = apiUp
+      ? "API connectée"
+      : "API injoignable — lance `uv run fastapi dev src/fleet_api/api.py`";
+  }
+  pingHealth();
+  setInterval(pingHealth, 4000);
 
   // ---- entrepôt -------------------------------------------------------
   const canvas = document.getElementById("floor");
@@ -334,34 +473,142 @@
   const DOCK = { x: 60, y: H - 60, w: 90, h: 46 };
   const R = 13; // rayon d'un robot
 
-  const NAMES = ["R1", "R2", "R3", "R4", "R5", "R6"];
-  let robots = NAMES.map((id, i) => ({
-    id,
-    x: 160 + (i % 3) * 230 + Math.random() * 40,
-    y: 100 + Math.floor(i / 3) * 260 + Math.random() * 40,
-    vx: (Math.random() - 0.5) * 1.4,
-    vy: (Math.random() - 0.5) * 1.4,
-    voltage_mv: EMPTY_MV + Math.random() * (FULL_MV - EMPTY_MV),
-    lastSeen: performance.now() / 1000,
-    isCharging: false,
-    signalLost: false,
-    trail: [],
-  }));
+  // ---- persistance locale : garde la simulation entre deux rechargements -
+  // (par viewer, dans ce navigateur seulement — ça ne synchronise rien avec l'API)
+  const STORAGE_KEY = "fleetFloorState";
+  function saveState() {
+    try {
+      localStorage.setItem(
+        STORAGE_KEY,
+        JSON.stringify({
+          nextRobotN,
+          paused,
+          speed,
+          robots: robots.map((r) => ({
+            id: r.id,
+            x: r.x,
+            y: r.y,
+            vx: r.vx,
+            vy: r.vy,
+            voltage_mv: r.voltage_mv,
+            isCharging: r.isCharging,
+            signalLost: r.signalLost,
+          })),
+        })
+      );
+    } catch {
+      // stockage indisponible (navigation privée, quota…) : tant pis, on continue sans.
+    }
+  }
+  function loadState() {
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY);
+      if (!raw) return null;
+      const data = JSON.parse(raw);
+      if (!Array.isArray(data.robots) || !data.robots.length) return null;
+      return data;
+    } catch {
+      return null;
+    }
+  }
+
+  let nextRobotN = 1;
+  function freshRobot() {
+    const id = "R" + nextRobotN++;
+    return {
+      id,
+      x: 80 + Math.random() * (W - 160),
+      y: 80 + Math.random() * (H - 160),
+      vx: (Math.random() - 0.5) * 1.4,
+      vy: (Math.random() - 0.5) * 1.4,
+      voltage_mv: EMPTY_MV + Math.random() * (FULL_MV - EMPTY_MV),
+      isCharging: false,
+      signalLost: false,
+      trail: [],
+      remote: null, // dernière réponse connue de GET /robots/{id}
+    };
+  }
+
+  const saved = loadState();
+  let robots;
+  let paused = saved ? !!saved.paused : false;
+  let speed = saved ? saved.speed || 1 : 1;
+  if (saved) {
+    nextRobotN = saved.nextRobotN || saved.robots.length + 1;
+    robots = saved.robots.map((r) => ({ ...r, trail: [], remote: null }));
+  } else {
+    robots = Array.from({ length: 6 }, freshRobot);
+  }
+
+  const speedSelect = document.getElementById("speedSelect");
+  speedSelect.value = String(speed);
+  speedSelect.addEventListener("change", (e) => {
+    speed = parseFloat(e.target.value);
+    saveState();
+  });
+  const btnPause = document.getElementById("btnPause");
+  btnPause.textContent = paused ? "reprendre" : "pause";
+  btnPause.addEventListener("click", () => {
+    paused = !paused;
+    btnPause.textContent = paused ? "reprendre" : "pause";
+    saveState();
+  });
+  document.getElementById("btnAdd").addEventListener("click", () => {
+    robots.push(freshRobot());
+    rowEls = null;
+    saveState();
+  });
+  document.getElementById("btnReset").addEventListener("click", () => {
+    nextRobotN = 1;
+    robots = Array.from({ length: 6 }, freshRobot);
+    rowEls = null;
+    saveState();
+  });
+
+  function removeRobot(id) {
+    robots = robots.filter((r) => r.id !== id);
+    rowEls = null;
+    saveState();
+  }
+  function forceLowBattery(id) {
+    const r = robots.find((x) => x.id === id);
+    if (!r) return;
+    r.voltage_mv = EMPTY_MV + 0.15 * (FULL_MV - EMPTY_MV); // ~15 %, sous le seuil
+    r.isCharging = false;
+    pushOne(r);
+    saveState();
+  }
+  function forceFullBattery(id) {
+    const r = robots.find((x) => x.id === id);
+    if (!r) return;
+    r.voltage_mv = FULL_MV;
+    r.isCharging = false;
+    pushOne(r);
+    saveState();
+  }
+  function toggleSignal(id) {
+    const r = robots.find((x) => x.id === id);
+    if (!r) return;
+    r.signalLost = !r.signalLost;
+    saveState();
+  }
 
   let lastFrame = performance.now();
-  const clock0 = performance.now() / 1000;
+  let simTime = 0;
 
   function step(now) {
-    const dt = Math.min((now - lastFrame) / 1000, 0.1);
+    const rawDt = Math.min((now - lastFrame) / 1000, 0.1);
     lastFrame = now;
-    const t = now / 1000;
 
-    for (const r of robots) {
-      const pct = batteryPercentage(r.voltage_mv);
-      const seeking = pct <= LOW_BATTERY_PCT + 5 && !r.isCharging;
+    if (!paused) {
+      const dt = rawDt * speed;
+      simTime += dt;
 
-      if (!r.signalLost) {
-        r.lastSeen = t;
+      for (const r of robots) {
+        if (r.signalLost) continue;
+
+        const pct = batteryPercentage(r.voltage_mv);
+        const seeking = pct <= LOW_BATTERY_PCT + 5 && !r.isCharging;
 
         if (seeking) {
           const dx = (DOCK.x + DOCK.w / 2) - r.x;
@@ -369,10 +616,7 @@
           const d = Math.hypot(dx, dy) || 1;
           r.vx += (dx / d) * 0.06;
           r.vy += (dy / d) * 0.06;
-          if (d < 26) {
-            r.isCharging = true;
-            r.vx = 0; r.vy = 0;
-          }
+          if (d < 26) { r.isCharging = true; r.vx = 0; r.vy = 0; }
         } else {
           r.vx += (Math.random() - 0.5) * 0.12;
           r.vy += (Math.random() - 0.5) * 0.12;
@@ -398,27 +642,22 @@
         if (r.y < R + 20) { r.y = R + 20; r.vy *= -1; }
         if (r.y > H - R - 20) { r.y = H - R - 20; r.vy *= -1; }
 
-        r.voltage_mv += r.isCharging ? 14 : -1.1;
+        r.voltage_mv += r.isCharging ? 14 * dt * 4 : -1.1 * dt * 4;
         r.voltage_mv = Math.max(EMPTY_MV - 200, Math.min(FULL_MV, r.voltage_mv));
 
         r.trail.push({ x: r.x, y: r.y });
         if (r.trail.length > 26) r.trail.shift();
-
-        if (Math.random() < 0.0009) r.signalLost = true;
-      } else {
-        if (Math.random() < 0.01) { r.signalLost = false; r.lastSeen = t; }
       }
     }
 
-    draw(t);
-    updateHud(t);
+    draw(simTime);
+    updateHud();
     requestAnimationFrame(step);
   }
 
   function draw(t) {
     ctx.clearRect(0, 0, W, H);
 
-    // station de charge
     ctx.fillStyle = getVar("--charge-bg");
     ctx.strokeStyle = getVar("--charge");
     ctx.lineWidth = 1.5;
@@ -430,10 +669,9 @@
     ctx.fillText("DOCK", DOCK.x + DOCK.w / 2, DOCK.y + DOCK.h / 2 + 4);
 
     for (const r of robots) {
-      const st = robotState(r.voltage_mv, t - r.lastSeen, r.isCharging);
-      const color = r.signalLost ? getVar("--off") : STATE_COLOR[st];
+      const st = r.signalLost ? "offline" : (r.remote ? r.remote.state : "pending");
+      const color = STATE_COLOR[st] || STATE_COLOR.pending;
 
-      // traînée
       ctx.beginPath();
       for (let i = 0; i < r.trail.length; i++) {
         const p = r.trail[i];
@@ -445,10 +683,9 @@
       ctx.stroke();
       ctx.globalAlpha = 1;
 
-      const x = r.x, y = r.signalLost ? r.y : r.y;
+      const x = r.x, y = r.y;
 
-      // halo si low/offline
-      if (st === "low_battery" && !r.signalLost) {
+      if (st === "low_battery") {
         ctx.beginPath();
         ctx.arc(x, y, R + 5 + Math.sin(t * 6) * 2, 0, Math.PI * 2);
         ctx.strokeStyle = color;
@@ -458,7 +695,6 @@
         ctx.globalAlpha = 1;
       }
 
-      // corps
       ctx.beginPath();
       ctx.arc(x, y, R, 0, Math.PI * 2);
       ctx.fillStyle = r.signalLost ? "transparent" : color;
@@ -469,15 +705,13 @@
       ctx.stroke();
       ctx.globalAlpha = 1;
 
-      // id
       ctx.fillStyle = getVar("--floor-0");
       ctx.font = "700 10px 'Archivo', sans-serif";
       ctx.textAlign = "center";
       ctx.textBaseline = "middle";
       if (!r.signalLost) ctx.fillText(r.id, x, y);
 
-      // jauge batterie
-      const pct = batteryPercentage(r.voltage_mv);
+      const pct = r.remote ? r.remote.battery_pct : batteryPercentage(r.voltage_mv);
       const bw = 26, bh = 4, bx = x - bw / 2, by = y - R - 11;
       ctx.fillStyle = getVar("--panel-border");
       ctx.fillRect(bx, by, bw, bh);
@@ -502,56 +736,119 @@
     c.closePath();
   }
 
+  // ---- appels à l'API réelle ----------------------------------------------
+  const PX_PER_METER = 8; // le canevas fait ~100 x 70 m d'entrepôt à cette échelle
+  async function pushOne(r) {
+    try {
+      await fetch(`${apiBase}/robots/${r.id}/telemetry`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          timestamp_s: Date.now() / 1000,
+          voltage_mv: Math.round(r.voltage_mv),
+          x: Math.round((r.x / PX_PER_METER) * 10) / 10,
+          y: Math.round((r.y / PX_PER_METER) * 10) / 10,
+          is_charging: r.isCharging,
+        }),
+        signal: AbortSignal.timeout(3000),
+      });
+    } catch {
+      // API injoignable : on continue la simu locale, pingHealth() signale l'état.
+    }
+  }
+
+  async function pullOne(r) {
+    try {
+      const res = await fetch(`${apiBase}/robots/${r.id}`, { signal: AbortSignal.timeout(3000) });
+      r.remote = res.ok ? await res.json() : null;
+    } catch {
+      r.remote = null;
+    }
+  }
+
+  let fleetRemote = null;
+  async function pullFleet() {
+    try {
+      const res = await fetch(`${apiBase}/fleet`, { signal: AbortSignal.timeout(3000) });
+      fleetRemote = res.ok ? await res.json() : null;
+    } catch {
+      fleetRemote = null;
+    }
+  }
+
+  setInterval(() => {
+    if (paused || !apiUp) return;
+    for (const r of robots) if (!r.signalLost) pushOne(r);
+  }, 1000);
+
+  setInterval(() => {
+    if (!apiUp) return;
+    for (const r of robots) pullOne(r);
+    pullFleet();
+  }, 1000);
+
+  setInterval(saveState, 2000);
+  window.addEventListener("pagehide", saveState);
+
+  // ---- panneau latéral ------------------------------------------------
   const listEl = document.getElementById("robotList");
   const statCount = document.getElementById("statCount");
   const statAvg = document.getElementById("statAvg");
   const statLow = document.getElementById("statLow");
 
-  function fleetSummary(readings, threshold = LOW_BATTERY_PCT) {
-    const levels = readings.map((r) => batteryPercentage(r.voltage_mv));
-    return {
-      robot_count: readings.length,
-      average_battery_pct: levels.length
-        ? Math.round((levels.reduce((a, b) => a + b, 0) / levels.length) * 10) / 10
-        : 0.0,
-      low_battery_count: levels.filter((l) => isLowBattery(l, threshold)).length,
-    };
+  let rowEls = null;
+  function buildRows() {
+    listEl.innerHTML = robots
+      .map(
+        (r) => `
+      <div class="robot-row" data-id="${r.id}">
+        <i class="dot"></i>
+        <span class="id">${r.id}</span>
+        <span class="pill"></span>
+        <span class="batt"></span>
+        <div class="actions">
+          <button class="icon-btn" data-act="low" title="Forcer batterie faible">⚡</button>
+          <button class="icon-btn" data-act="full" title="Forcer pleine charge">🔋</button>
+          <button class="icon-btn" data-act="signal" title="Couper / rétablir le signal">📡</button>
+          <button class="icon-btn danger" data-act="remove" title="Retirer ce robot">✕</button>
+        </div>
+      </div>`
+      )
+      .join("");
+    rowEls = {};
+    listEl.querySelectorAll(".robot-row").forEach((el) => {
+      rowEls[el.dataset.id] = {
+        dot: el.querySelector(".dot"),
+        pill: el.querySelector(".pill"),
+        batt: el.querySelector(".batt"),
+      };
+    });
+    listEl.querySelectorAll("[data-act]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const id = btn.closest(".robot-row").dataset.id;
+        const act = btn.dataset.act;
+        if (act === "low") forceLowBattery(id);
+        else if (act === "full") forceFullBattery(id);
+        else if (act === "signal") toggleSignal(id);
+        else if (act === "remove") removeRobot(id);
+      });
+    });
   }
 
-  let rowEls = null;
-  function updateHud(t) {
-    const summary = fleetSummary(robots);
+  function updateHud() {
+    const summary = fleetRemote || { robot_count: robots.length, average_battery_pct: 0, low_battery_count: 0 };
     statCount.textContent = summary.robot_count;
     statAvg.textContent = summary.average_battery_pct.toFixed(1) + "%";
     statLow.textContent = summary.low_battery_count;
 
-    if (!rowEls) {
-      listEl.innerHTML = robots
-        .map(
-          (r) => `
-        <div class="robot-row" data-id="${r.id}">
-          <i class="dot"></i>
-          <span class="id">${r.id}</span>
-          <span class="pill"></span>
-          <span class="batt"></span>
-        </div>`
-        )
-        .join("");
-      rowEls = {};
-      listEl.querySelectorAll(".robot-row").forEach((el) => {
-        rowEls[el.dataset.id] = {
-          dot: el.querySelector(".dot"),
-          pill: el.querySelector(".pill"),
-          batt: el.querySelector(".batt"),
-        };
-      });
-    }
+    if (!rowEls) buildRows();
 
     for (const r of robots) {
-      const st = r.signalLost ? "offline" : robotState(r.voltage_mv, t - r.lastSeen, r.isCharging);
-      const pct = batteryPercentage(r.voltage_mv);
       const row = rowEls[r.id];
-      row.dot.style.background = STATE_COLOR[st];
+      if (!row) continue; // liste en cours de reconstruction
+      const st = r.signalLost ? "offline" : (r.remote ? r.remote.state : "pending");
+      const pct = r.remote ? r.remote.battery_pct : batteryPercentage(r.voltage_mv);
+      row.dot.style.background = STATE_COLOR[st] || STATE_COLOR.pending;
       row.pill.textContent = st;
       row.pill.className = "pill " + st;
       row.batt.textContent = pct.toFixed(1) + "%";
