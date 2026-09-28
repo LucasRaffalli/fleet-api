@@ -10,6 +10,7 @@ from fleet_api.models import Position, Reading, RobotState
 from fleet_api.telemetry import (
     average_speed_mps,
     battery_percentage,
+    detect_voltage_dropouts,
     distance_m,
     estimate_runtime_minutes,
     is_low_battery,
@@ -210,3 +211,30 @@ def test_robot_state_operational():
 def test_robot_state_juste_avant_le_delai_de_grace():
     reading = _reading(timestamp_s=0.0, voltage_mv=12_600)
     assert robot_state(reading, now_s=120.0, grace_s=120.0) == RobotState.OPERATIONAL
+
+
+# ---------------------------------------------------------------------------
+# detect_voltage_dropouts — indices d'arrivée des chutes strictement > seuil.
+# ---------------------------------------------------------------------------
+
+
+def test_detect_voltage_dropouts_aucune_chute():
+    readings = [_reading(voltage_mv=v) for v in (12_000, 11_900, 11_950)]
+    assert detect_voltage_dropouts(readings, max_drop_mv=200) == []
+
+
+def test_detect_voltage_dropouts_chute_detectee():
+    readings = [_reading(voltage_mv=v) for v in (12_000, 11_000, 10_900)]
+    assert detect_voltage_dropouts(readings, max_drop_mv=500) == [1]
+
+
+def test_detect_voltage_dropouts_remontee_non_signalee():
+    """Une remontée de tension n'est jamais une chute."""
+    readings = [_reading(voltage_mv=v) for v in (11_000, 12_000)]
+    assert detect_voltage_dropouts(readings, max_drop_mv=100) == []
+
+
+def test_detect_voltage_dropouts_egal_au_seuil_non_signale():
+    """La chute doit être strictement supérieure au seuil pour être signalée."""
+    readings = [_reading(voltage_mv=v) for v in (12_000, 11_800)]
+    assert detect_voltage_dropouts(readings, max_drop_mv=200) == []
