@@ -7,7 +7,11 @@ Tout le reste est à écrire — voir le TD 1.
 import pytest
 
 from fleet_api.models import Position
-from fleet_api.telemetry import battery_percentage, distance_m
+from fleet_api.telemetry import (
+    battery_percentage,
+    distance_m,
+    is_low_battery,
+)
 
 # ---------------------------------------------------------------------------
 # Exemple 1 — un test simple, avec un cas nominal et les deux bornes.
@@ -51,11 +55,26 @@ def test_battery_percentage_rejette_des_bornes_incoherentes():
 
 
 # ---------------------------------------------------------------------------
-# À vous. Huit fonctions de fleet_api.telemetry n'ont aucun test :
-#
-#   is_low_battery, path_length_m, average_speed_mps, estimate_runtime_minutes,
-#   median_voltage_mv, robot_state, detect_voltage_dropouts, fleet_summary
-#
-# Écrivez-les en vous appuyant sur les docstrings, qui font foi.
-# Trois de ces fonctions ne respectent pas leur spécification.
+# is_low_battery — l'alerte se déclenche pour battery_pct <= threshold_pct
+# (« inférieur ou égal »), donc un robot pile au seuil doit être en alerte.
 # ---------------------------------------------------------------------------
+
+
+def test_is_low_battery_sous_le_seuil():
+    assert is_low_battery(15.0, 20.0) is True
+
+
+def test_is_low_battery_au_dessus_du_seuil():
+    assert is_low_battery(50.0, 20.0) is False
+
+
+@pytest.mark.xfail(
+    reason=(
+        "bug : is_low_battery utilise `<` au lieu de `<=`, un robot exactement "
+        "au seuil n'est donc pas signalé en alerte, contrairement à la docstring."
+    ),
+    strict=True,
+)
+def test_is_low_battery_pile_au_seuil():
+    """« Un robot exactement au seuil est donc en alerte » (docstring)."""
+    assert is_low_battery(20.0, 20.0) is True
