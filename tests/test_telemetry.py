@@ -13,6 +13,7 @@ from fleet_api.telemetry import (
     detect_voltage_dropouts,
     distance_m,
     estimate_runtime_minutes,
+    fleet_summary,
     is_low_battery,
     median_voltage_mv,
     path_length_m,
@@ -238,3 +239,43 @@ def test_detect_voltage_dropouts_egal_au_seuil_non_signale():
     """La chute doit être strictement supérieure au seuil pour être signalée."""
     readings = [_reading(voltage_mv=v) for v in (12_000, 11_800)]
     assert detect_voltage_dropouts(readings, max_drop_mv=200) == []
+
+
+# ---------------------------------------------------------------------------
+# fleet_summary
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.xfail(
+    reason=(
+        "bug : fleet_summary([]) lève ZeroDivisionError (division par "
+        "len(levels) sans garde), alors que la docstring documente "
+        "explicitement {'robot_count': 0, 'average_battery_pct': 0.0, "
+        "'low_battery_count': 0} comme résultat attendu pour une flotte vide."
+    ),
+    strict=True,
+)
+def test_fleet_summary_flotte_vide():
+    assert fleet_summary([]) == {
+        "robot_count": 0,
+        "average_battery_pct": 0.0,
+        "low_battery_count": 0,
+    }
+
+
+def test_fleet_summary_cas_nominal():
+    readings = [
+        _reading(robot_id="r1", voltage_mv=12_600),  # 100 %
+        _reading(robot_id="r2", voltage_mv=10_500),  # 0 %
+    ]
+    assert fleet_summary(readings) == {
+        "robot_count": 2,
+        "average_battery_pct": 50.0,
+        "low_battery_count": 1,
+    }
+
+
+def test_fleet_summary_seuil_personnalise():
+    readings = [_reading(robot_id="r1", voltage_mv=11_550)]  # 50 %
+    resultat = fleet_summary(readings, threshold_pct=60.0)
+    assert resultat["low_battery_count"] == 1
