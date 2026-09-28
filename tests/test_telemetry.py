@@ -6,13 +6,14 @@ Tout le reste est à écrire — voir le TD 1.
 
 import pytest
 
-from fleet_api.models import Position
+from fleet_api.models import Position, Reading
 from fleet_api.telemetry import (
     average_speed_mps,
     battery_percentage,
     distance_m,
     estimate_runtime_minutes,
     is_low_battery,
+    median_voltage_mv,
     path_length_m,
 )
 
@@ -147,3 +148,33 @@ def test_estimate_runtime_minutes_cas_nominal():
 @pytest.mark.parametrize("drain_pct_per_min", [0.0, -1.0])
 def test_estimate_runtime_minutes_pas_de_decharge(drain_pct_per_min):
     assert estimate_runtime_minutes(50.0, drain_pct_per_min) is None
+
+
+# ---------------------------------------------------------------------------
+# median_voltage_mv
+# ---------------------------------------------------------------------------
+
+
+def _reading(robot_id="r1", timestamp_s=0.0, voltage_mv=12_000, is_charging=False):
+    return Reading(
+        robot_id=robot_id,
+        timestamp_s=timestamp_s,
+        voltage_mv=voltage_mv,
+        position=Position(0, 0),
+        is_charging=is_charging,
+    )
+
+
+def test_median_voltage_mv_liste_vide():
+    assert median_voltage_mv([]) is None
+
+
+def test_median_voltage_mv_nombre_impair():
+    readings = [_reading(voltage_mv=v) for v in (11_000, 12_000, 10_000)]
+    assert median_voltage_mv(readings) == 11_000
+
+
+def test_median_voltage_mv_nombre_pair():
+    """Sur un nombre pair de mesures, la médiane moyenne les deux valeurs centrales."""
+    readings = [_reading(voltage_mv=v) for v in (10_000, 11_000, 12_000, 13_000)]
+    assert median_voltage_mv(readings) == pytest.approx(11_500)
