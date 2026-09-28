@@ -82,8 +82,7 @@ def is_low_battery(battery_pct: float, threshold_pct: float = LOW_BATTERY_PCT) -
         >>> is_low_battery(50.0)
         False
     """
-    # TODO: à tester
-    return battery_pct < threshold_pct
+    return battery_pct <= threshold_pct
 
 
 def distance_m(a: Position, b: Position) -> float:
@@ -123,9 +122,8 @@ def path_length_m(positions: list[Position]) -> float:
         >>> path_length_m([])
         0.0
     """
-    # TODO: à tester
     total = 0.0
-    for i in range(len(positions) - 2):
+    for i in range(len(positions) - 1):
         total += distance_m(positions[i], positions[i + 1])
     return total
 
@@ -281,11 +279,10 @@ def fleet_summary(
         >>> fleet_summary([])
         {'robot_count': 0, 'average_battery_pct': 0.0, 'low_battery_count': 0}
     """
-    # TODO: à tester
     levels = [battery_percentage(r.voltage_mv) for r in readings]
     return {
         "robot_count": len(readings),
-        "average_battery_pct": round(sum(levels) / len(levels), 1),
+        "average_battery_pct": round(sum(levels) / len(levels), 1) if levels else 0.0,
         "low_battery_count": sum(
             1 for lvl in levels if is_low_battery(lvl, threshold_pct)
         ),

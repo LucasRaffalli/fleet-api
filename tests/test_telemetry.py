@@ -75,13 +75,6 @@ def test_is_low_battery_au_dessus_du_seuil():
     assert is_low_battery(50.0, 20.0) is False
 
 
-@pytest.mark.xfail(
-    reason=(
-        "bug : is_low_battery utilise `<` au lieu de `<=`, un robot exactement "
-        "au seuil n'est donc pas signalé en alerte, contrairement à la docstring."
-    ),
-    strict=True,
-)
 def test_is_low_battery_pile_au_seuil():
     """« Un robot exactement au seuil est donc en alerte » (docstring)."""
     assert is_low_battery(20.0, 20.0) is True
@@ -100,25 +93,10 @@ def test_path_length_m_un_seul_point():
     assert path_length_m([Position(0, 0)]) == 0.0
 
 
-@pytest.mark.xfail(
-    reason=(
-        "bug : la boucle `range(len(positions) - 2)` saute le dernier segment "
-        "du trajet, deux positions donnent donc une longueur nulle au lieu de "
-        "la distance entre elles."
-    ),
-    strict=True,
-)
 def test_path_length_m_deux_points():
     assert path_length_m([Position(0, 0), Position(3, 4)]) == pytest.approx(5.0)
 
 
-@pytest.mark.xfail(
-    reason=(
-        "bug : même cause, un trajet à trois points ne compte que le premier "
-        "segment, pas la somme complète."
-    ),
-    strict=True,
-)
 def test_path_length_m_trois_points():
     trajet = [Position(0, 0), Position(3, 4), Position(3, 0)]
     # segment 1 : (0,0)->(3,4) = 5.0 ; segment 2 : (3,4)->(3,0) = 4.0
@@ -246,15 +224,6 @@ def test_detect_voltage_dropouts_egal_au_seuil_non_signale():
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.xfail(
-    reason=(
-        "bug : fleet_summary([]) lève ZeroDivisionError (division par "
-        "len(levels) sans garde), alors que la docstring documente "
-        "explicitement {'robot_count': 0, 'average_battery_pct': 0.0, "
-        "'low_battery_count': 0} comme résultat attendu pour une flotte vide."
-    ),
-    strict=True,
-)
 def test_fleet_summary_flotte_vide():
     assert fleet_summary([]) == {
         "robot_count": 0,
