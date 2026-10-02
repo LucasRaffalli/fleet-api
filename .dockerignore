@@ -1,0 +1,28 @@
+# Environnement virtuel local : construit pour VOTRE machine, pas pour l'image
+.venv/
+# L'historique complet
+.git/
+.github/
+# Des caches, reconstruits de toute façon
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+# Artefacts de build et de couverture
+dist/
+htmlcov/
+.coverage
+# L'image de production n'a pas à embarquer les tests
+tests/
+# La documentation ne sert pas à l'exécution…
+*.md
+# … sauf lui : pyproject.toml le déclare comme readme
+!README.md
+# Secrets : une couche les garde pour toujours
+.env
+.env.*
+# Les fichiers de construction eux-mêmes
+Dockerfile*
+.dockerignore
+compose.yaml

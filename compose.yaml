@@ -1,0 +1,34 @@
+services:
+  db:
+    image: postgres:18-alpine
+    environment:
+      POSTGRES_USER: app
+      POSTGRES_PASSWORD: app
+      POSTGRES_DB: fleet
+    ports:
+      - "5432:5432"
+    volumes:
+      # PostgreSQL 18 range ses données sous /var/lib/postgresql/<version>/
+      - pgdata:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U app -d fleet"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 5s
+
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    environment:
+      # « db » est le nom du service : localhost désignerait le conteneur api lui-même
+      DATABASE_URL: postgresql://app:app@db:5432/fleet
+    ports:
+      - "8000:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+
+volumes:
+  pgdata:
