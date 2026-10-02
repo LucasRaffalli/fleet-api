@@ -31,6 +31,15 @@ RUN --mount=type=cache,target=/root/.cache/uv \
 # ---------------------------------------------------------------------------
 FROM python:3.14-slim-trixie
 
+# Correctifs de sécurité Debian publiés depuis la construction de l'image de
+# base. Compromis assumé : le contenu dépend de la date de build.
+RUN apt-get update && apt-get upgrade -y \
+ && rm -rf /var/lib/apt/lists/*
+
+# Une image d'exécution n'installe rien : pip est inutile et embarque ses
+# propres dépendances vendorisées.
+RUN python -m pip uninstall -y pip
+
 RUN groupadd --system --gid 10001 app \
  && useradd --system --uid 10001 --gid app \
       --no-create-home --shell /usr/sbin/nologin app
